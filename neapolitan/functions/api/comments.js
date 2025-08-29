@@ -1,146 +1,107 @@
-/**
- * 코멘트 API (KV 기반, 1인 1회, 삭제 시 재번호 부여)
- * - GET /api/comment : { items:[{id,text,t,n}], already:bool }
- * - POST /api/comment : body={ text } (auth=ok 쿠키 필수, 1회 제한)
- * - DELETE /api/comment : body={ id, admin } (admin=OWNER_PASSWORD)
- *
- * KV 바인딩: env.COMMENTS
- * 환경변수 : env.SECRET_SALT (선택), env.OWNER_PASSWORD (필수), auth 쿠키는 /api/login에서 발급
- *
- * 저장 구조:
- * - "idx" : JSON 배열 [id1,id2,...] (표시 순서)
- * - "c:<id>" : JSON { id, text, t } (단일 코멘트)
- * - "by:<ipHash>" : "<id>" (1인 1회 방지)
- * - "who:<id>" : "<ipHash>" (역방향: 삭제 시 1회 제한도 해제 가능)
- */
+// KV 바인딩: env.COMMENTS
+// 운영자 비번: env.OWNER_PASSWORD
+// 구조:
+// idx = JSON 배열 [id1,id2,...] (코멘트 순서)
+// comments:<id> = JSON { id, text, by, at }
+// by:<ipHash> = <id> (1인 1회 방지)
 
 export async function onRequest({ request, env }) {
-  const { COMMENTS, OWNER_PASSWORD, SECRET_SALT = "s" } = env;
   const url = new URL(request.url);
   const method = request.method.toUpperCase();
 
-  // util
+  // 유틸: 해시 (IP 보호용)
   async function sha256(s) {
     const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
-    return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
+    return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2,"0")).join("");
   }
   async function ipHash(req) {
-    const ip =
-      req.headers.get("cf-connecting-ip") ||
-      req.headers.get("CF-Connecting-IP") ||
-      "0.0.0.0";
-    return sha256(`${SECRET_SALT}|${ip}`);
-  }
-  async function loadIndex() {
-    const raw = await COMMENTS.get("idx");
-    return raw ? JSON.parse(raw) : [];
-  }
-  async function saveIndex(arr) {
-    await COMMENTS.put("idx", JSON.stringify(arr));
+    const ip = req.headers.get("cf-connecting-ip") || "0.0.0.0";
+    return await sha256(ip + (env.SECRET_SALT || "salt"));
   }
 
-  // GET: 목록 + 현재 사용자 이미 작성여부
+  // 리스트 조회
   if (method === "GET") {
-    const idx = await loadIndex();
-    // 최신순으로 보여주고 싶으면 reverse() 하세요. 지금은 등록순.
-    const items = [];
-    for (let i = 0; i < idx.length; i++) {
-      const id = idx[i];
-      const c = await COMMENTS.get(`c:${id}`, { type: "json" });
-      if (c) items.push({ ...c, n: i + 1 }); // 여기서 번호를 붙임
+    const idxRaw = await env.COMMENTS.get("idx");
+    if (!idxRaw) return new Response("[]", { headers: { "Content-Type": "application/json" }});
+    const idx = JSON.parse(idxRaw);
+    const out = [];
+    for (let id of idx) {
+      const c = await env.COMMENTS.get("comments:" + id);
+      if (c) out.push(JSON.parse(c));
     }
-    const h = await ipHash(request);
-    const already = !!(await COMMENTS.get(`by:${h}`));
-    return new Response(JSON.stringify({ items, already }), {
-      headers: { "Content-Type": "application/json" },
-    });
+    return new Response(JSON.stringify(out), { headers: { "Content-Type": "application/json" }});
   }
 
-  // POST: 작성(1인 1회, auth=ok 쿠키 필요)
+  // 코멘트 작성
   if (method === "POST") {
-    const cookie = request.headers.get("Cookie") || "";
-    const authed = /(?:^|;\s*)auth=ok(?:;|$)/.test(cookie);
-    if (!authed) {
-      return new Response(JSON.stringify({ ok: false, message: "unauthorized" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
-      });
+    const ip = await ipHash(request);
+    const body = await request.json().catch(() => ({}));
+    const text = (body.text || "").trim();
+
+    if (!text) return new Response(JSON.stringify({ error:"내용이 비어있습니다."}), { status:400 });
+
+    // 중복 방지 (한 번만 작성 가능)
+    const prev = await env.COMMENTS.get("by:" + ip);
+    if (prev) {
+      return new Response(JSON.stringify({ error:"이미 코멘트를 작성했습니다."}), { status:403 });
     }
 
-    const { text } = await request.json().catch(() => ({}));
-    const t = (text || "").toString().trim();
-    if (!t || t.length > 300) {
-      return new Response(JSON.stringify({ ok: false, message: "1~300자만 허용" }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
+    // 신규 ID
+    let idxRaw = await env.COMMENTS.get("idx");
+    let idx = idxRaw ? JSON.parse(idxRaw) : [];
+    const newId = idx.length + 1;
+    const entry = {
+      id: newId,
+      text,
+      by: "탈출자 " + newId,
+      at: Date.now()
+    };
 
-    const h = await ipHash(request);
-    const exists = await COMMENTS.get(`by:${h}`);
-    if (exists) {
-      return new Response(JSON.stringify({ ok: false, already: true, message: "이미 코멘트를 남기셨습니다." }), {
-        status: 409,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
+    // 저장
+    idx.push(newId);
+    await env.COMMENTS.put("idx", JSON.stringify(idx));
+    await env.COMMENTS.put("comments:" + newId, JSON.stringify(entry));
+    await env.COMMENTS.put("by:" + ip, String(newId));
 
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const item = { id, text: t, t: Date.now() };
-
-    // index 뒤에 추가(등록순)
-    const idx = await loadIndex();
-    idx.push(id);
-    await saveIndex(idx);
-
-    await COMMENTS.put(`c:${id}`, JSON.stringify(item));
-    await COMMENTS.put(`by:${h}`, id);
-    await COMMENTS.put(`who:${id}`, h);
-
-    // n은 클라이언트에 알려주기 위해 계산해서 내려줌
-    return new Response(JSON.stringify({ ok: true, item: { ...item, n: idx.length } }), {
-      headers: { "Content-Type": "application/json" },
-    });
+    return new Response(JSON.stringify(entry), { headers: { "Content-Type": "application/json" }});
   }
 
-  // DELETE: 운영자 삭제(OWNER_PASSWORD 검증) → 재번호는 목록 만들 때 자동 처리
+  // 코멘트 삭제 (운영자만 가능)
   if (method === "DELETE") {
-    const { id, admin } = await request.json().catch(() => ({}));
-    if (!id || !admin) {
-      return new Response(JSON.stringify({ ok: false, message: "id/admin 필요" }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-    if (admin !== OWNER_PASSWORD) {
-      return new Response(JSON.stringify({ ok: false, message: "forbidden" }), {
-        status: 403,
-        headers: { "Content-Type": "application/json" },
-      });
+    const auth = request.headers.get("Authorization") || "";
+    if (auth !== "Bearer " + env.OWNER_PASSWORD) {
+      return new Response("권한 없음", { status:403 });
     }
 
-    // 인덱스에서 제거
-    const idx = await loadIndex();
-    const pos = idx.indexOf(id);
-    if (pos === -1) {
-      return new Response(JSON.stringify({ ok: false, message: "not found" }), {
-        status: 404,
-        headers: { "Content-Type": "application/json" },
-      });
+    const { id } = await request.json().catch(()=>({}));
+    if (!id) return new Response("잘못된 요청", { status:400 });
+
+    // idx에서 빼고 다시 채우기
+    let idxRaw = await env.COMMENTS.get("idx");
+    let idx = idxRaw ? JSON.parse(idxRaw) : [];
+    idx = idx.filter(x => x !== id);
+
+    // ID 리셋 (1부터 다시 이어지도록)
+    const comments = [];
+    for (let newId = 0; newId < idx.length; newId++) {
+      const c = await env.COMMENTS.get("comments:" + idx[newId]);
+      if (c) {
+        const parsed = JSON.parse(c);
+        parsed.id = newId + 1;
+        parsed.by = "탈출자 " + (newId + 1);
+        comments.push(parsed);
+      }
     }
-    idx.splice(pos, 1);
-    await saveIndex(idx);
 
-    // 데이터 삭제
-    const who = await COMMENTS.get(`who:${id}`);
-    if (who) await COMMENTS.delete(`by:${who}`);
-    await COMMENTS.delete(`who:${id}`);
-    await COMMENTS.delete(`c:${id}`);
+    // 저장 리셋
+    await env.COMMENTS.delete("idx");
+    await env.COMMENTS.put("idx", JSON.stringify(comments.map(c=>c.id)));
+    for (let c of comments) {
+      await env.COMMENTS.put("comments:" + c.id, JSON.stringify(c));
+    }
 
-    return new Response(JSON.stringify({ ok: true }), {
-      headers: { "Content-Type": "application/json" },
-    });
+    return new Response(JSON.stringify({ ok:true }), { headers: { "Content-Type": "application/json" }});
   }
 
-  return new Response("Method not allowed", { status: 405 });
+  return new Response("Method Not Allowed", { status:405 });
 }
