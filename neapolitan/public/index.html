@@ -3,118 +3,108 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>입장 허가</title>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600;700&family=Cinzel:wght@700&display=swap" rel="stylesheet">
+  <title>ACCESS REQUIRED</title>
   <style>
-    :root { --bg:#0a0a0a; --fg:#e9e9e9; --muted:#a5a5a5; --line:#232323; --accent:#ff2d55; }
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{margin:0; background:#0b0b0b; color:var(--fg); font-family:"Noto Serif KR", serif; display:grid; place-items:center; overflow:hidden;}
-    .noise:before{content:""; position:fixed; inset:-40px; pointer-events:none; opacity:.05; mix-blend-mode:screen;
-      background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 10 10'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/></filter><rect width='10' height='10' filter='url(%23n)' opacity='0.6'/></svg>");
-      animation:grain 1s steps(2) infinite;}
-    @keyframes grain { 0%{transform:translate(0,0)} 100%{transform:translate(-10px,10px)} }
-    .card{width:min(480px,92vw); padding:26px 22px 20px; border-radius:18px; background:linear-gradient(180deg, rgba(28,28,28,.92), rgba(10,10,10,.92));
-      border:1px solid var(--line); box-shadow:0 16px 40px rgba(0,0,0,.45); position:relative; overflow:hidden;}
-    .title{font-family:"Cinzel",serif; letter-spacing:.08em; margin:0 0 8px; font-size:24px}
-    .subtitle{margin:0 0 18px; color:var(--muted); font-size:14px}
-    .input{width:100%; padding:14px 16px; border-radius:12px; border:1px solid #2a2a2a; background:#0e0e0e; color:var(--fg); font-size:16px; outline:none;}
-    .input:focus{ border-color:#3a3a3a; box-shadow:0 0 0 4px rgba(255,45,85,.08) }
-    .btn{margin-top:12px; width:100%; padding:13px 16px; border:0; border-radius:12px; cursor:pointer; background:linear-gradient(180deg,#2a2a2a,#1a1a1a); color:var(--fg); font-weight:600; letter-spacing:.02em;}
-    .btn[disabled]{opacity:.6; cursor:default}
-    .status{margin-top:14px; min-height:24px; font-size:14px; color:#cfcfcf; white-space:pre-line}
-    .overlay{position:fixed; inset:0; background:rgba(0,0,0,.75); display:none; align-items:center; justify-content:center; z-index:10;}
-    .modal{width:min(520px,92vw); background:#121212; border:1px solid var(--line); border-radius:16px; padding:22px 20px; box-shadow:0 10px 30px rgba(0,0,0,.4); text-align:center;}
-    .modal h2{margin:0 0 10px; font-family:"Cinzel",serif; letter-spacing:.04em}
-    .modal p{margin:0; color:#d0d0d0}
-    .spinner{width:18px;height:18px;border:2px solid #777;border-top-color:#fff;border-radius:50%;display:inline-block;animation:spin 0.8s linear infinite;vertical-align:-3px;margin-right:8px}
-    @keyframes spin{to{transform:rotate(360deg)}}
-    .scanline{position:absolute; left:0; right:0; height:1px; top:0; background:linear-gradient(90deg,transparent,rgba(255,255,255,.14),transparent); animation:scan 6s linear infinite}
-    @keyframes scan{0%{top:-10%}100%{top:110%}}
-    /* 경고 연출 */
-    .shake { animation: sh 0.5s ease; }
-    @keyframes sh {10%,90%{transform:translateX(-2px)}20%,80%{transform:translateX(4px)}30%,50%,70%{transform:translateX(-6px)}40%,60%{transform:translateX(6px)}}
-    .red { color:#ff3b3b; }
+    body {
+      margin:0; height:100vh; display:flex; align-items:center; justify-content:center;
+      background:#000; color:#0f0; font-family:monospace;
+      letter-spacing:0.05em; overflow:hidden;
+    }
+    .screen {
+      width:90%; max-width:600px; text-align:center; padding:20px;
+    }
+    h1 { font-size:22px; margin-bottom:12px; }
+    .input { width:100%; padding:12px; background:#111; border:1px solid #333; color:#0f0; }
+    .btn { margin-top:12px; padding:12px; width:100%; background:#111; border:1px solid #333; color:#0f0; cursor:pointer; }
+    .status { margin-top:14px; min-height:22px; font-size:14px; color:#ccc; white-space:pre-line; }
+    .overlay {
+      position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+      background:rgba(0,0,0,.9); color:#f00; font-size:20px; font-family:monospace;
+    }
+    .shake1 { animation:shake1 0.4s; }
+    .shake2 { animation:shake2 0.6s; }
+    .shake3 { animation:shake3 0.8s; }
+    @keyframes shake1 {
+      0%,100%{transform:translate(0,0)}25%{transform:translate(-5px,0)}75%{transform:translate(5px,0)}
+    }
+    @keyframes shake2 {
+      0%,100%{transform:translate(0,0)}20%{transform:translate(-10px,0)}40%{transform:translate(10px,0)}60%{transform:translate(-10px,0)}80%{transform:translate(10px,0)}
+    }
+    @keyframes shake3 {
+      0%,100%{transform:translate(0,0)}10%{transform:translate(-15px,0)}30%{transform:translate(15px,0)}50%{transform:translate(-15px,0)}70%{transform:translate(15px,0)}90%{transform:translate(-15px,0)}
+    }
   </style>
 </head>
-<body class="noise">
-  <form id="gate" class="card" autocomplete="off">
-    <div class="scanline" aria-hidden="true"></div>
-    <h1 class="title">ACCESS REQUIRED</h1>
-    <p class="subtitle">정답을 입력하면 입장합니다.</p>
-    <input class="input" id="pw" type="password" name="password" placeholder="비밀번호" required />
-    <button class="btn" id="submitBtn" type="submit">확인</button>
+<body>
+  <div class="screen" id="screen">
+    <h1>ACCESS REQUIRED</h1>
+    <form id="gate" autocomplete="off">
+      <input class="input" id="pw" type="password" name="password" placeholder="비밀번호" required />
+      <button class="btn" id="submitBtn" type="submit">확인</button>
+    </form>
     <div class="status" id="status"></div>
-  </form>
-
-  <div class="overlay" id="overlay" role="dialog" aria-modal="true">
-    <div class="modal"><div id="modalText"></div></div>
   </div>
+
+  <div class="overlay" id="overlay"></div>
 
   <script>
     const form = document.getElementById('gate');
     const pwEl = document.getElementById('pw');
     const statusEl = document.getElementById('status');
     const overlay = document.getElementById('overlay');
-    const modalText = document.getElementById('modalText');
-    const btn = document.getElementById('submitBtn');
+    const screen = document.getElementById('screen');
 
-    function typeLine(text, target){ return new Promise(r=>{ target.textContent=''; let i=0; (function t(){ target.textContent=text.slice(0, i++); if(i<=text.length) requestAnimationFrame(t); else r(); })(); }); }
-    const showModal = html => { modalText.innerHTML = html; overlay.style.display='flex'; };
-    const hideModal = () => { overlay.style.display='none'; };
+    function pulseShake(level) {
+      screen.classList.remove('shake1','shake2','shake3');
+      void screen.offsetWidth; // reflow
+      screen.classList.add('shake'+level);
+    }
 
-    form.addEventListener('submit', async (e) => {
+    function showPenalty(message, untilTs) {
+      const remain = () => {
+        const diff = untilTs - Date.now();
+        if (diff <= 0) { overlay.style.display='none'; return; }
+        const h = Math.floor(diff/3600000);
+        const m = Math.floor((diff%3600000)/60000);
+        const s = Math.floor((diff%60000)/1000);
+        overlay.innerHTML = `<div><p>${message}</p><p>남은 시간: ${h}시간 ${m}분 ${s}초</p></div>`;
+        setTimeout(remain,1000);
+      };
+      overlay.style.display='flex';
+      remain();
+    }
+
+    form.addEventListener('submit', async e=>{
       e.preventDefault();
-      const password = pwEl.value.trim(); if (!password) return;
-
-      btn.disabled = true; pwEl.disabled = true;
-      await typeLine('검증 중입니다…', statusEl);
-      statusEl.insertAdjacentHTML('beforeend',' <span class="spinner"></span>');
-
+      const password = pwEl.value.trim();
+      if (!password) return;
       try {
         const res = await fetch('/api/login', {
           method:'POST',
-          body: new URLSearchParams({ password }),
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+          body:new URLSearchParams({ password }),
+          headers:{'Content-Type':'application/x-www-form-urlencoded'}
         });
-        const data = await res.json().catch(()=>({}));
+        const data = await res.json();
 
-        if (res.ok && data.ok) {
-          showModal('<h2>성공</h2><p>마침내 첫번째 게임을 풀었군요.</p>');
-          setTimeout(()=>{ location.href='/secret/'; }, 1200);
-          return;
-        }
-
-        // 단계별 연출
-        if (data.stage === 'warn1' || data.stage === 'warn2') {
-          const html = `<h2>실패</h2><p>${data.message}</p>`;
-          showModal(html);
-          setTimeout(()=>{ hideModal(); btn.disabled=false; pwEl.disabled=false; pwEl.focus(); }, 1400);
-        } else if (data.stage === 'penalty' || data.stage === 'banned') {
-          // TTL을 시:분으로 환산
-          let hours = 0, minutes = 0;
-          if (data.ttl) {
-            hours = Math.floor(data.ttl / 3600);
-            minutes = Math.floor((data.ttl % 3600) / 60);
-          }
-          const msg = `당신의 카르마에 의하여,<br>당신은 앞으로 ${hours}시간 ${minutes}분 동안 게임에 참여하실 수 없습니다.`;
-          const html = `<h2 class="red">패널티</h2><p class="red">${msg}</p>`;
-          showModal(html);
-          document.querySelector('.modal').classList.add('shake');
-          setTimeout(()=>{ btn.disabled = true; pwEl.disabled = true; }, 1600);
+        if (data.ok && data.stage==='success') {
+          location.href='/secret/';
+        } else if (data.stage==='warn1') {
+          statusEl.textContent=data.message;
+          pulseShake(1);
+        } else if (data.stage==='warn2') {
+          statusEl.textContent=data.message;
+          pulseShake(2);
+        } else if (data.stage==='penalty') {
+          showPenalty(data.message, data.until);
+          pulseShake(3);
         } else {
-          const html = `<h2>실패</h2><p>${data.message || '부탁입니다. 신중하게 해주세요.'}</p>`;
-          showModal(html);
-          setTimeout(()=>{ hideModal(); btn.disabled=false; pwEl.disabled=false; pwEl.focus(); }, 1400);
+          statusEl.textContent=data.message || '신중하게 시도해주세요.';
+          pulseShake(1);
         }
-      } catch (e) {
-        showModal('<h2>오류</h2><p>잠시 후 다시 시도해 주세요.</p>');
-        setTimeout(()=>{ hideModal(); btn.disabled=false; pwEl.disabled=false; }, 1400);
+      } catch(err){
+        statusEl.textContent='네트워크 오류';
       }
     });
-
-    if (new URL(location.href).searchParams.get('err') === '1') { typeLine('비밀번호가 틀렸습니다.', statusEl); }
-    pwEl.focus();
   </script>
 </body>
 </html>
