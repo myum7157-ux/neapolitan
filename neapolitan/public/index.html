@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>입장 비밀번호</title>
+</head>
+<body>
+  <h2>비밀번호를 입력하세요</h2>
+  <form method="POST" action="/api/login">
+    <input type="password" name="password" required />
+    <button type="submit">확인</button>
+  </form>
+  <p style="color:red;">
+    <script>
+      if (new URL(location.href).searchParams.get('err') === '1') {
+        document.write('비밀번호가 틀렸습니다.');
+      }
+    </script>
+  </p>
+</body>
+</html>
