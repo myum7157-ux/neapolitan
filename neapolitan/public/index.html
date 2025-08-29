@@ -2,21 +2,158 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>입장 비밀번호</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>입장 허가</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600;700&family=Cinzel:wght@700&display=swap" rel="stylesheet">
+  <style>
+    :root { --bg:#0a0a0a; --fg:#e9e9e9; --muted:#a5a5a5; --line:#232323; --accent:#ff2d55; }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; background:#0b0b0b; color:var(--fg);
+      font-family:"Noto Serif KR", serif; display:grid; place-items:center; overflow:hidden;
+    }
+    .noise:before{
+      content:""; position:fixed; inset:-40px; pointer-events:none; opacity:.05; mix-blend-mode:screen;
+      background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 10 10'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/></filter><rect width='10' height='10' filter='url(%23n)' opacity='0.6'/></svg>");
+      animation:grain 1s steps(2) infinite;
+    }
+    @keyframes grain { 0%{transform:translate(0,0)} 100%{transform:translate(-10px,10px)} }
+
+    .card{
+      width:min(480px,92vw); padding:26px 22px 20px; border-radius:18px;
+      background:linear-gradient(180deg, rgba(28,28,28,.92), rgba(10,10,10,.92));
+      border:1px solid var(--line); box-shadow:0 16px 40px rgba(0,0,0,.45);
+      position:relative; overflow:hidden;
+    }
+    .title{font-family:"Cinzel",serif; letter-spacing:.08em; margin:0 0 8px; font-size:24px}
+    .subtitle{margin:0 0 18px; color:var(--muted); font-size:14px}
+    .input{
+      width:100%; padding:14px 16px; border-radius:12px; border:1px solid #2a2a2a;
+      background:#0e0e0e; color:var(--fg); font-size:16px; outline:none;
+    }
+    .input:focus{ border-color:#3a3a3a; box-shadow:0 0 0 4px rgba(255,45,85,.08) }
+    .btn{
+      margin-top:12px; width:100%; padding:13px 16px; border:0; border-radius:12px; cursor:pointer;
+      background:linear-gradient(180deg,#2a2a2a,#1a1a1a); color:var(--fg); font-weight:600; letter-spacing:.02em;
+    }
+    .btn[disabled]{opacity:.6; cursor:default}
+
+    .status{margin-top:14px; min-height:24px; font-size:14px; color:#cfcfcf; white-space:pre-line}
+    .cursor{display:inline-block; width:8px; margin-left:2px; background:currentColor; animation:blink 1s step-end infinite}
+    @keyframes blink { 50%{opacity:0} }
+
+    .overlay{
+      position:fixed; inset:0; background:rgba(0,0,0,.75); display:none;
+      align-items:center; justify-content:center; z-index:10;
+    }
+    .modal{
+      width:min(520px,92vw); background:#121212; border:1px solid var(--line); border-radius:16px;
+      padding:22px 20px; box-shadow:0 10px 30px rgba(0,0,0,.4); text-align:center;
+    }
+    .modal h2{margin:0 0 10px; font-family:"Cinzel",serif; letter-spacing:.04em}
+    .modal p{margin:0; color:#d0d0d0}
+    .spinner{width:18px;height:18px;border:2px solid #777;border-top-color:#fff;border-radius:50%;display:inline-block;animation:spin 0.8s linear infinite;vertical-align:-3px;margin-right:8px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    .scanline{position:absolute; left:0; right:0; height:1px; top:0;
+      background:linear-gradient(90deg,transparent,rgba(255,255,255,.14),transparent);
+      animation:scan 6s linear infinite}
+    @keyframes scan{0%{top:-10%}100%{top:110%}}
+  </style>
 </head>
-<body>
-  <h2>비밀번호를 입력하세요</h2>
-  <form method="POST" action="/api/login">
-    <input type="password" name="password" required />
-    <button type="submit">확인</button>
+<body class="noise">
+  <form id="gate" class="card" autocomplete="off">
+    <div class="scanline" aria-hidden="true"></div>
+    <h1 class="title">ACCESS REQUIRED</h1>
+    <p class="subtitle">정답을 입력하면 입장합니다.</p>
+
+    <input class="input" id="pw" type="password" name="password" placeholder="비밀번호" required />
+    <button class="btn" id="submitBtn" type="submit">확인</button>
+
+    <div class="status" id="status"></div>
   </form>
-  <p style="color:red;">
-    <script>
-      if (new URL(location.href).searchParams.get('err') === '1') {
-        document.write('비밀번호가 틀렸습니다.');
+
+  <!-- 모달(성공/실패 메시지 + 잠깐 대기) -->
+  <div class="overlay" id="overlay" role="dialog" aria-modal="true">
+    <div class="modal">
+      <div id="modalText"></div>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('gate');
+    const pwEl = document.getElementById('pw');
+    const statusEl = document.getElementById('status');
+    const overlay = document.getElementById('overlay');
+    const modalText = document.getElementById('modalText');
+    const btn = document.getElementById('submitBtn');
+
+    // 타자 효과
+    function typeLine(text, target, speed = 28) {
+      return new Promise(resolve => {
+        target.textContent = '';
+        let i = 0;
+        const tick = () => {
+          target.textContent = text.slice(0, i++);
+          if (i <= text.length) requestAnimationFrame(tick);
+          else resolve();
+        };
+        tick();
+      });
+    }
+
+    function showModal(html) {
+      modalText.innerHTML = html;
+      overlay.style.display = 'flex';
+    }
+    function hideModal(){ overlay.style.display = 'none'; }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const password = pwEl.value.trim();
+      if (!password) return;
+
+      // UI 잠금 + 로딩 메시지(타자 효과)
+      btn.disabled = true; pwEl.disabled = true;
+      await typeLine('검증 중입니다…', statusEl);
+      statusEl.insertAdjacentHTML('beforeend',' <span class="spinner"></span>');
+
+      try {
+        // 서버에 직접 요청해서 302 Location을 확인한다
+        const res = await fetch('/api/login', {
+          method:'POST',
+          body: new URLSearchParams({ password }),
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          redirect: 'manual' // 302를 직접 처리
+        });
+
+        const loc = res.headers.get('Location') || '';
+        const ok = res.status === 302 && loc.startsWith('/secret');
+
+        // 성공/실패 모달 문구
+        if (ok) {
+          showModal('<h2>성공</h2><p>마침내 첫번째 게임을 풀었군요.</p>');
+          // 잠깐 보여주고 본문으로
+          setTimeout(() => { window.location.href = loc || '/secret/'; }, 1200);
+        } else {
+          showModal('<h2>실패</h2><p>부탁입니다. 신중하게 해주세요.</p>');
+          // 잠깐 보여주고 입력 재시도
+          setTimeout(() => { hideModal(); btn.disabled=false; pwEl.disabled=false; pwEl.focus(); }, 1400);
+        }
+      } catch (err) {
+        // 네트워크 등 예외
+        showModal('<h2>오류</h2><p>잠시 후 다시 시도해 주세요.</p>');
+        setTimeout(() => { hideModal(); btn.disabled=false; pwEl.disabled=false; }, 1400);
       }
-    </script>
-  </p>
+    });
+
+    // 페이지 파라미터 에러(직접 접근 시) 처리
+    if (new URL(location.href).searchParams.get('err') === '1') {
+      typeLine('비밀번호가 틀렸습니다.', statusEl);
+    }
+    // 처음부터 가운데 포커스
+    pwEl.focus();
+  </script>
 </body>
 </html>
