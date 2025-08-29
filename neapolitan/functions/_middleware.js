@@ -5,7 +5,7 @@ export const onRequest = [
       const cookie = request.headers.get('Cookie') || '';
       const hasAuth = /(?:^|;\s*)auth=ok(?:;|$)/.test(cookie);
       if (!hasAuth) {
-        return new Response(null, { status: 302, headers: { 'Location': '/' } });
+        return new Response(null, { status: 302, headers: { Location: '/' } });
       }
     }
     return next();
