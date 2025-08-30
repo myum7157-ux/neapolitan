@@ -24,26 +24,24 @@ export async function onRequest({ request, env }) {
 
   // 텍스트 정리
   const sanitize = (s) =>
-    String(s)
-      .replace(/[\u200B-\u200D\uFEFF]/g, "")
-      .replace(/\s{3,}/g, " ")
-      .trim();
+    String(s).replace(/[\u200B-\u200D\uFEFF]/g, "").replace(/\s{3,}/g, " ").trim();
 
-  // ===== GET: 목록 (페이지네이션) =====
+  // ===== GET: 목록 (페이지네이션, 오래된→최신) =====
   if (method === "GET") {
     const page = parseInt(url.searchParams.get("page") || "1", 10);
     const limit = parseInt(url.searchParams.get("limit") || "20", 10);
     const MAX_LIMIT = 50;
     const safeLimit = Math.max(1, Math.min(limit, MAX_LIMIT));
 
-    const idx = JSON.parse((await COMMENTS.get("idx")) || "[]");
+    const idx = JSON.parse((await COMMENTS.get("idx")) || "[]"); // [1,2,3,...] 순으로 누적
     const total = idx.length;
     const totalPages = Math.ceil(total / safeLimit) || 1;
     const curPage = Math.max(1, Math.min(page, totalPages));
 
-    const start = Math.max(0, total - curPage * safeLimit);
-    const end = total - (curPage - 1) * safeLimit;
-    const slice = idx.slice(start, end);
+    // 오래된→최신: 앞에서부터 자른다
+    const start = (curPage - 1) * safeLimit;
+    const end = curPage * safeLimit;
+    const slice = idx.slice(start, end); // 그대로 오래된→최신
 
     const items = [];
     for (const id of slice) {
