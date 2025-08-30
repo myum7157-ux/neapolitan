@@ -126,4 +126,4 @@ export async function onRequest({ request, env }) {
   }
 
   return json({ error: "Method Not Allowed" }, 405);
-      }
+}
