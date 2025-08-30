@@ -67,8 +67,8 @@ export async function onRequest({ request, env }) {
     await COMMENTS.put(`c:${id}`, JSON.stringify(item));
     if (!isAdminWriter) {
       const who = await ipHash();
-      await COMMENTS.put(`by:${who}`, String(id));
-      await COMMENTS.put(`who:${id}`, who);
+      await COMMENTS.put(`by:${who}`, String(id)); // ← 잠금 기록(남겨둠)
+      await COMMENTS.put(`who:${id}`, who);        // ← 역참조(삭제 시 정리)
     }
     await putIdx(idx);
 
@@ -87,13 +87,15 @@ export async function onRequest({ request, env }) {
     const idx = await getIdx();
     if (!idx.includes(id)) return json({ error:"NOT_FOUND" }, 404);
 
-    // 지정한 id만 지움 (전체삭제 금지)
+    // 지정한 id만 지움
     const who = await COMMENTS.get(`who:${id}`);
-    await COMMENTS.delete(`c:${id}`);
+
+    await COMMENTS.delete(`c:${id}`);   // 본문 삭제
+    // ★ 잠금 유지: by:<ipHash>는 지우지 않는다 (원 작성자는 계속 재작성 불가)
     if (who) {
-      await COMMENTS.delete(`by:${who}`);
-      await COMMENTS.delete(`who:${id}`);
+      await COMMENTS.delete(`who:${id}`); // 역참조만 정리
     }
+
     const next = idx.filter(x => x !== id);
     await putIdx(next);
 
